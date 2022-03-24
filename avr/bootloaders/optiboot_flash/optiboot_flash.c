@@ -672,7 +672,9 @@ int main(void) {
   //watchdogConfig(WATCHDOG_OFF);
   /* Forever loop: exits by causing WDT reset */
   for (;;) {
-    /* get character from UART */
+// openBLT support for optiboot
+#if OPENBLT_ENABLE == 1
+/* get character from UART */
     ch = getch();
     //expect the first byte to be len
     if(xcpInfo.rx_packet_len==0)
@@ -682,8 +684,6 @@ int main(void) {
       //continue with loop
       continue;
     }
-// openBLT support for optiboot
-#if OPENBLT_ENABLE == 1
     /* was this a connect command? */
     if (ch == XCP_CMD_CONNECT) {
       /* process the connect command */
@@ -722,7 +722,6 @@ int main(void) {
     } 
     /* only continue if connected */
     else if (xcpInfo.connected == 1) {
-      // watchdogConfig(WATCHDOG_1S);
       switch (ch) {
       case XCP_CMD_UPLOAD: {
         // // get requested data lenghts
@@ -742,7 +741,6 @@ int main(void) {
         break;
       case XCP_CMD_SET_MTA: {
         // Set address
-        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
         xcpInfo.mta = 0;
@@ -765,7 +763,6 @@ int main(void) {
         break;
       }
       case XCP_CMD_GET_STATUS:
-        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
 
@@ -792,7 +789,6 @@ int main(void) {
         break;
       case XCP_CMD_PROGRAM_MAX:
       {
-        //watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         uint8_t *bufPtr;
         pagelen_t savelength;
         // get len
@@ -814,8 +810,6 @@ int main(void) {
         // adress auto increment
         address.bytes[0] = (uint8_t)(xcpInfo.mta);
         address.bytes[1] = (uint8_t)(xcpInfo.mta >> 8);
-        // Convert from word address to byte address
-        //address.word *= 2;
         break;
       }
       case XCP_CMD_PROGRAM: {
@@ -829,8 +823,7 @@ int main(void) {
         xcpInfo.ctoData[0] = XCP_PID_RES;
         /* set packet length */
         xcpInfo.ctoLen = 1;
-        /**write flash*/
-        // read a page worth of contents
+        // read a page
         bufPtr = buff.bptr;
         do
           *bufPtr++ = getch();
@@ -842,13 +835,9 @@ int main(void) {
         // adress auto increment
         address.bytes[0] = (uint8_t)(xcpInfo.mta);
         address.bytes[1] = (uint8_t)(xcpInfo.mta >> 8);
-        // Convert from word address to byte address
-        //address.word *= 2;
         break;
       }
       case XCP_CMD_PROGRAM_START:
-        /** memory clear not needed explicitly*/
-        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
 
@@ -872,7 +861,6 @@ int main(void) {
       case XCP_CMD_PROGRAM_CLEAR:
       {
         /** memory clear not needed explicitly*/
-        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
       //read all data
         for(int i=0;i<7;i++)
         {
@@ -894,6 +882,8 @@ int main(void) {
     }
     /* send the response if it contains something */
     if (xcpInfo.ctoLen > 0) {
+      //clear overrun flag
+      UART_SRA&=~_BV(DOR0);
       // transmit len of data packet
       putch(xcpInfo.ctoLen);
       // transmitt data packets
