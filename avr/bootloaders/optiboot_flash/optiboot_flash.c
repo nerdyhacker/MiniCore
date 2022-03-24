@@ -879,8 +879,15 @@ int main(void) {
     }
     /* send the response if it contains something */
     if (xcpInfo.ctoLen > 0) {
+      //flush rx buffer
+      while (UART_SRA&_BV(RXC0))
+      {
+        ch = UDR0;
+      } 
       //clear overrun flag
       UART_SRA&=~_BV(DOR0);
+      //clear parity flag
+      //UART_SRA&=~_BV(UPE0);
       // transmit len of data packet
       putch(xcpInfo.ctoLen);
       // transmitt data packets
