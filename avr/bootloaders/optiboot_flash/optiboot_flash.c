@@ -686,9 +686,6 @@ int main(void) {
     }
     /* was this a connect command? */
     if (ch == XCP_CMD_CONNECT) {
-      /* process the connect command */
-      watchdogReset();
-      // watchdogConfig(WATCHDOG_1S);// keep watchdog happy
       watchdogConfig(WATCHDOG_OFF);
       /* indicate that the connection is established */
       xcpInfo.connected = 1;
