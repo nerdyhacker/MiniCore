@@ -512,6 +512,9 @@ int main(void) {
   xcpInfo.ctoLen = 0;
   xcpInfo.ctoPending = 0;
   xcpInfo.rx_packet_len=0;
+
+  unsigned char rx_data[132];
+  uint8_t rx_buff_index;
 #endif
 
   // After the zero init loop, this is the first code to run.
@@ -679,11 +682,26 @@ int main(void) {
     //expect the first byte to be len
     if(xcpInfo.rx_packet_len==0)
     {
+      if(ch==0)
+      continue;
       //get the packet len
       xcpInfo.rx_packet_len=ch;
       //continue with loop
       continue;
     }
+    // if(ch!=0)
+    // {
+    //   xcpInfo.rx_packet_len=ch;
+    //   rx_buff_index=0;
+    //   while(rx_buff_index<xcpInfo.rx_packet_len)
+    //   {
+    //     rx_data[rx_buff_index++]=getch();
+    //   }
+    //   ch=rx_data[0];
+    // }
+    // else{
+    //   continue;
+    // }
     /* was this a connect command? */
     if (ch == XCP_CMD_CONNECT) {
       watchdogConfig(WATCHDOG_OFF);
@@ -820,6 +838,8 @@ int main(void) {
         xcpInfo.ctoData[0] = XCP_PID_RES;
         /* set packet length */
         xcpInfo.ctoLen = 1;
+        if(len!=0)
+        {
         // read a page
         bufPtr = buff.bptr;
         do
@@ -832,6 +852,7 @@ int main(void) {
         // adress auto increment
         address.bytes[0] = (uint8_t)(xcpInfo.mta);
         address.bytes[1] = (uint8_t)(xcpInfo.mta >> 8);
+        }
         break;
       }
       case XCP_CMD_PROGRAM_START:
