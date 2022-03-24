@@ -285,10 +285,9 @@ typedef union {
 typedef struct {
   uint8_t ctoData[BOOT_COM_RX_MAX_DATA]; /**< cto packet data buffer        */
   uint8_t connected;                     /**< connection established        */
-  uint8_t ctoPending;                    /**< cto transmission pending flag */
-  uint8_t rx_packet_len;                  /**< this will store the rx packet len*/
-  uint16_t ctoLen;                       /**< cto current packet length     */
-  uint32_t mta;                          /**< memory transfer address       */
+  uint8_t rx_packet_len; /**< this will store the rx packet len*/
+  uint16_t ctoLen;       /**< cto current packet length     */
+  uint32_t mta;          /**< memory transfer address       */
 } tXcpInfo;
 
 #endif
@@ -503,18 +502,15 @@ int main(void) {
    *  necessary, and uses 4 bytes of flash.)
    */
   register addr16_t address;
-  register pagelen_t length;
-#ifdef OPENBLT_ENABLE
+#if OPENBLT_ENABLE == 1
   /** xcp info instance*/
   tXcpInfo xcpInfo;
   // initialize xcpInfo
   xcpInfo.connected = 0;
   xcpInfo.ctoLen = 0;
-  xcpInfo.ctoPending = 0;
-  xcpInfo.rx_packet_len=0;
-
-  unsigned char rx_data[132];
-  uint8_t rx_buff_index;
+  xcpInfo.rx_packet_len = 0;
+#else
+register pagelen_t length;
 #endif
 
   // After the zero init loop, this is the first code to run.
@@ -671,40 +667,27 @@ int main(void) {
   /* Turn on LED to indicate starting bootloader (less code!) */
   LED_PORT |= _BV(LED);
 #endif
-  //putch('x');
-  //watchdogConfig(WATCHDOG_OFF);
+  // putch('x');
+  // watchdogConfig(WATCHDOG_OFF);
   /* Forever loop: exits by causing WDT reset */
   for (;;) {
 // openBLT support for optiboot
 #if OPENBLT_ENABLE == 1
-/* get character from UART */
+    /* get character from UART */
     ch = getch();
-    //expect the first byte to be len
-    if(xcpInfo.rx_packet_len==0)
-    {
-      if(ch==0)
-      continue;
-      //get the packet len
-      xcpInfo.rx_packet_len=ch;
-      //continue with loop
+    // expect the first byte to be len
+    if (xcpInfo.rx_packet_len == 0) {
+      if (ch == 0)
+        continue;
+      // get the packet len
+      xcpInfo.rx_packet_len = ch;
+      // continue with loop
       continue;
     }
-    // if(ch!=0)
-    // {
-    //   xcpInfo.rx_packet_len=ch;
-    //   rx_buff_index=0;
-    //   while(rx_buff_index<xcpInfo.rx_packet_len)
-    //   {
-    //     rx_data[rx_buff_index++]=getch();
-    //   }
-    //   ch=rx_data[0];
-    // }
-    // else{
-    //   continue;
-    // }
     /* was this a connect command? */
     if (ch == XCP_CMD_CONNECT) {
-      watchdogConfig(WATCHDOG_OFF);
+      // watchdogConfig(WATCHDOG_OFF);
+      // watchdogConfig(WATCHDOG_250MS);
       /* indicate that the connection is established */
       xcpInfo.connected = 1;
 
@@ -721,10 +704,12 @@ int main(void) {
       xcpInfo.ctoData[2] |= 0x00; // XCP_MOTOROLA_FORMAT;
 
       /* report max cto data length */
-      xcpInfo.ctoData[3] = 129;//(uint8_t)(136); // max rx data {validation required}(128 +1)
+      xcpInfo.ctoData[3] =
+          129; //(uint8_t)(136); // max rx data {validation required}(128 +1)
 
       /* report max dto data length */
-      xcpInfo.ctoData[4] = (uint8_t)129; // max tx data {validation required} (128 + 1)
+      xcpInfo.ctoData[4] =
+          (uint8_t)129; // max tx data {validation required} (128 + 1)
       xcpInfo.ctoData[5] = 0;
       /* report msb of protocol layer version number */
       xcpInfo.ctoData[6] = XCP_VERSION_PROTOCOL_LAYER >> 8;
@@ -734,21 +719,19 @@ int main(void) {
 
       /* set packet length */
       xcpInfo.ctoLen = 8;
-    } 
+    }
     /* only continue if connected */
     else if (xcpInfo.connected == 1) {
       switch (ch) {
       case XCP_CMD_UPLOAD: {
         // // get requested data lenghts
-        // uint8_t len = getch();
-        // // send data len + response
-        // putch(len + 1);
-        // /*send commnad response*/
-        // putch(XCP_PID_RES);
-        // /* post increment the mta */
-        // xcpInfo.mta += len;
-        // // read mem
-        // read_mem('F', address, len);
+        uint8_t len = getch();
+        // send data len + response
+        putch(len + 1);
+        /*send commnad response*/
+        putch(XCP_PID_RES);
+        // read mem
+        read_mem('F', address, len);
         break;
       }
       case XCP_CMD_SHORT_UPLOAD:
@@ -766,11 +749,6 @@ int main(void) {
         // geting  address
         address.bytes[0] = getch();
         address.bytes[1] = getch();
-        // mta
-        xcpInfo.mta |= address.bytes[0];
-        xcpInfo.mta |= (uint32_t)(address.bytes[1] << 8);
-        // xcpInfo.mta |= (uint32_t)(getch() << 16);
-        // xcpInfo.mta |= (uint32_t)(getch() << 24);
         getch(); // ignore
         getch(); // ignore
         /* set packet length */
@@ -802,14 +780,13 @@ int main(void) {
         /* set packet length */
         xcpInfo.ctoLen = 1;
         break;
-      case XCP_CMD_PROGRAM_MAX:
-      {
+      case XCP_CMD_PROGRAM_MAX: {
         uint8_t *bufPtr;
         pagelen_t savelength;
         // get len
-        uint8_t len = 128;//(uint8_t)BOOT_COM_RX_MAX_DATA - 1;
+        uint8_t len = 128; //(uint8_t)BOOT_COM_RX_MAX_DATA - 1;
         savelength = len;
-         // read a page worth of contents
+        // read a page worth of contents
         bufPtr = buff.bptr;
         do
           *bufPtr++ = getch();
@@ -820,11 +797,6 @@ int main(void) {
         xcpInfo.ctoLen = 1;
         // write
         writebuffer('F', buff, address, savelength);
-        /* post increment the mta */
-        xcpInfo.mta += len;
-        // adress auto increment
-        address.bytes[0] = (uint8_t)(xcpInfo.mta);
-        address.bytes[1] = (uint8_t)(xcpInfo.mta >> 8);
         break;
       }
       case XCP_CMD_PROGRAM: {
@@ -838,20 +810,14 @@ int main(void) {
         xcpInfo.ctoData[0] = XCP_PID_RES;
         /* set packet length */
         xcpInfo.ctoLen = 1;
-        if(len!=0)
-        {
-        // read a page
-        bufPtr = buff.bptr;
-        do
-          *bufPtr++ = getch();
-        while (--len);
-        // write
-        writebuffer('F', buff, address, savelength);
-        /* post increment the mta */
-        xcpInfo.mta += len;
-        // adress auto increment
-        address.bytes[0] = (uint8_t)(xcpInfo.mta);
-        address.bytes[1] = (uint8_t)(xcpInfo.mta >> 8);
+        if (len != 0) {
+          // read a page
+          bufPtr = buff.bptr;
+          do
+            *bufPtr++ = getch();
+          while (--len);
+          // write
+          writebuffer('F', buff, address, savelength);
         }
         break;
       }
@@ -866,7 +832,7 @@ int main(void) {
         xcpInfo.ctoData[2] = 0;
 
         /* cto packet length stays the same during programming */
-        xcpInfo.ctoData[3] = 129;//(uint8_t)BOOT_COM_RX_MAX_DATA;
+        xcpInfo.ctoData[3] = 129; //(uint8_t)BOOT_COM_RX_MAX_DATA;
 
         /* no block size, st-min time, or queue size supported */
         xcpInfo.ctoData[4] = 0;
@@ -876,15 +842,13 @@ int main(void) {
         /* set packet length */
         xcpInfo.ctoLen = 7;
         break;
-      case XCP_CMD_PROGRAM_CLEAR:
-      {
+      case XCP_CMD_PROGRAM_CLEAR: {
         /** memory clear not needed explicitly*/
-      //read all data
-        for(int i=0;i<7;i++)
-        {
-             getch();
+        // read all data
+        for (int i = 0; i < 7; i++) {
+          getch();
         }
-       /* set packet id to command response packet */
+        /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
         /* set packet length */
         xcpInfo.ctoLen = 1;
@@ -900,16 +864,15 @@ int main(void) {
     }
     /* send the response if it contains something */
     if (xcpInfo.ctoLen > 0) {
-      //flush rx buffer
-      while (UART_SRA&_BV(RXC0))
-      {
+      // flush rx buffer
+      while (UART_SRA & _BV(RXC0)) {
         ch = UDR0;
-      } 
-      //clear overrun flag
-      UART_SRA&=~_BV(DOR0);
-      //clear parity flag
-      //UART_SRA&=~_BV(UPE0);
-      // transmit len of data packet
+      }
+      // clear overrun flag
+      UART_SRA &= ~_BV(DOR0);
+      // clear parity flag
+      // UART_SRA&=~_BV(UPE0);
+      //  transmit len of data packet
       putch(xcpInfo.ctoLen);
       // transmitt data packets
       for (int i = 0; i < xcpInfo.ctoLen; i++) {
@@ -917,8 +880,8 @@ int main(void) {
       }
       // set len to zero
       xcpInfo.ctoLen = 0;
-      //reset recieve packet len
-      xcpInfo.rx_packet_len=0;
+      // reset recieve packet len
+      xcpInfo.rx_packet_len = 0;
     }
 #else
     if (ch == STK_GET_PARAMETER) {
