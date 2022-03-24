@@ -285,9 +285,8 @@ typedef union {
 typedef struct {
   uint8_t ctoData[BOOT_COM_RX_MAX_DATA]; /**< cto packet data buffer        */
   uint8_t connected;                     /**< connection established        */
-  uint8_t protection;                    /**< protection state              */
-  uint8_t s_n_k_resource;                /**< for seed/key sequence         */
   uint8_t ctoPending;                    /**< cto transmission pending flag */
+  uint8_t rx_packet_len;                  /**< this will store the rx packet len*/
   uint16_t ctoLen;                       /**< cto current packet length     */
   uint32_t mta;                          /**< memory transfer address       */
 } tXcpInfo;
@@ -508,10 +507,11 @@ int main(void) {
 #ifdef OPENBLT_ENABLE
   /** xcp info instance*/
   tXcpInfo xcpInfo;
-  //initialize xcpInfo
-  xcpInfo.connected=0;
-  xcpInfo.ctoLen=0;
-  xcpInfo.ctoPending=0;
+  // initialize xcpInfo
+  xcpInfo.connected = 0;
+  xcpInfo.ctoLen = 0;
+  xcpInfo.ctoPending = 0;
+  xcpInfo.rx_packet_len=0;
 #endif
 
   // After the zero init loop, this is the first code to run.
@@ -668,18 +668,28 @@ int main(void) {
   /* Turn on LED to indicate starting bootloader (less code!) */
   LED_PORT |= _BV(LED);
 #endif
-putch('x');
+  //putch('x');
+  //watchdogConfig(WATCHDOG_OFF);
   /* Forever loop: exits by causing WDT reset */
   for (;;) {
     /* get character from UART */
     ch = getch();
+    //expect the first byte to be len
+    if(xcpInfo.rx_packet_len==0)
+    {
+      //get the packet len
+      xcpInfo.rx_packet_len=ch;
+      //continue with loop
+      continue;
+    }
 // openBLT support for optiboot
 #if OPENBLT_ENABLE == 1
     /* was this a connect command? */
     if (ch == XCP_CMD_CONNECT) {
       /* process the connect command */
-       //watchdogConfig(WATCHDOG_1S);// keep watchdog happy
-       watchdogConfig(WATCHDOG_OFF);
+      watchdogReset();
+      // watchdogConfig(WATCHDOG_1S);// keep watchdog happy
+      watchdogConfig(WATCHDOG_OFF);
       /* indicate that the connection is established */
       xcpInfo.connected = 1;
 
@@ -696,10 +706,10 @@ putch('x');
       xcpInfo.ctoData[2] |= 0x00; // XCP_MOTOROLA_FORMAT;
 
       /* report max cto data length */
-      xcpInfo.ctoData[3] = (uint8_t)(136); // max rx data {validation required}
+      xcpInfo.ctoData[3] = 129;//(uint8_t)(136); // max rx data {validation required}(128 +1)
 
       /* report max dto data length */
-      xcpInfo.ctoData[4] = (uint8_t)64; // max tx data {validation required}
+      xcpInfo.ctoData[4] = (uint8_t)129; // max tx data {validation required} (128 + 1)
       xcpInfo.ctoData[5] = 0;
       /* report msb of protocol layer version number */
       xcpInfo.ctoData[6] = XCP_VERSION_PROTOCOL_LAYER >> 8;
@@ -709,28 +719,22 @@ putch('x');
 
       /* set packet length */
       xcpInfo.ctoLen = 8;
-    }
-    else if(ch=='S')
-    {
-      watchdogConfig(WATCHDOG_OFF);
-      putch('S');
-      putch('U');
-    }
+    } 
     /* only continue if connected */
     else if (xcpInfo.connected == 1) {
-     // watchdogConfig(WATCHDOG_1S);
+      // watchdogConfig(WATCHDOG_1S);
       switch (ch) {
       case XCP_CMD_UPLOAD: {
-        // get requested data lenghts
-        uint8_t len = getch();
-        // send data len + response
-        putch(len + 1);
-        /*send commnad response*/
-        putch(XCP_PID_RES);
-        /* post increment the mta */
-        xcpInfo.mta += len;
-        //read mem
-        read_mem('F', address,len);
+        // // get requested data lenghts
+        // uint8_t len = getch();
+        // // send data len + response
+        // putch(len + 1);
+        // /*send commnad response*/
+        // putch(XCP_PID_RES);
+        // /* post increment the mta */
+        // xcpInfo.mta += len;
+        // // read mem
+        // read_mem('F', address, len);
         break;
       }
       case XCP_CMD_SHORT_UPLOAD:
@@ -738,41 +742,30 @@ putch('x');
         break;
       case XCP_CMD_SET_MTA: {
         // Set address
-        watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
+        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
         xcpInfo.mta = 0;
         /** get reserve byte of mta*/
         getch(); // 1st reserve byte
-        getch();      // 2nd reserve byte
-        getch();      // 3rd reserve byte
-        //gating  address
+        getch(); // 2nd reserve byte
+        getch(); // 3rd reserve byte
+        // geting  address
         address.bytes[0] = getch();
         address.bytes[1] = getch();
-        //mta
+        // mta
         xcpInfo.mta |= address.bytes[0];
         xcpInfo.mta |= (uint32_t)(address.bytes[1] << 8);
         // xcpInfo.mta |= (uint32_t)(getch() << 16);
         // xcpInfo.mta |= (uint32_t)(getch() << 24);
-        getch(); //ignore
-        getch(); //ignore
-        //Convert from word address to byte address
-        address.word *= 2; 
+        getch(); // ignore
+        getch(); // ignore
         /* set packet length */
         xcpInfo.ctoLen = 1;
         break;
       }
-      case XCP_CMD_BUILD_CHECKSUM:
-        // XcpCmdBuildCheckSum(data);
-        break;
-      case XCP_CMD_GET_ID:
-        // XcpCmdGetId(data);
-        break;
-      case XCP_CMD_SYNCH:
-        // XcpCmdSynch(data);
-        break;
       case XCP_CMD_GET_STATUS:
-        //watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
+        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
 
@@ -798,29 +791,35 @@ putch('x');
         xcpInfo.ctoLen = 1;
         break;
       case XCP_CMD_PROGRAM_MAX:
-        watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
+      {
+        //watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         uint8_t *bufPtr;
         pagelen_t savelength;
         // get len
-        uint8_t len = (uint8_t)BOOT_COM_RX_MAX_DATA - 1;
+        uint8_t len = 128;//(uint8_t)BOOT_COM_RX_MAX_DATA - 1;
         savelength = len;
-        /* set packet id to command response packet */
-        xcpInfo.ctoData[0] = XCP_PID_RES;
-        /* set packet length */
-        xcpInfo.ctoLen = 1;
-        /**write flash*/
-        // read a page worth of contents
+         // read a page worth of contents
         bufPtr = buff.bptr;
         do
           *bufPtr++ = getch();
         while (--len);
+        /* set packet id to command response packet */
+        xcpInfo.ctoData[0] = XCP_PID_RES;
+        /* set packet length */
+        xcpInfo.ctoLen = 1;
         // write
-        writebuffer('F', buff,address, savelength);
+        writebuffer('F', buff, address, savelength);
         /* post increment the mta */
         xcpInfo.mta += len;
+        // adress auto increment
+        address.bytes[0] = (uint8_t)(xcpInfo.mta);
+        address.bytes[1] = (uint8_t)(xcpInfo.mta >> 8);
+        // Convert from word address to byte address
+        //address.word *= 2;
         break;
+      }
       case XCP_CMD_PROGRAM: {
-        watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
+        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         uint8_t *bufPtr;
         pagelen_t savelength;
         // get len
@@ -837,14 +836,19 @@ putch('x');
           *bufPtr++ = getch();
         while (--len);
         // write
-        writebuffer('F', buff,address, savelength);
+        writebuffer('F', buff, address, savelength);
         /* post increment the mta */
         xcpInfo.mta += len;
+        // adress auto increment
+        address.bytes[0] = (uint8_t)(xcpInfo.mta);
+        address.bytes[1] = (uint8_t)(xcpInfo.mta >> 8);
+        // Convert from word address to byte address
+        //address.word *= 2;
         break;
       }
       case XCP_CMD_PROGRAM_START:
         /** memory clear not needed explicitly*/
-        watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
+        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
         /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
 
@@ -855,7 +859,7 @@ putch('x');
         xcpInfo.ctoData[2] = 0;
 
         /* cto packet length stays the same during programming */
-        xcpInfo.ctoData[3] = (uint8_t)BOOT_COM_RX_MAX_DATA;
+        xcpInfo.ctoData[3] = 129;//(uint8_t)BOOT_COM_RX_MAX_DATA;
 
         /* no block size, st-min time, or queue size supported */
         xcpInfo.ctoData[4] = 0;
@@ -866,54 +870,40 @@ putch('x');
         xcpInfo.ctoLen = 7;
         break;
       case XCP_CMD_PROGRAM_CLEAR:
+      {
         /** memory clear not needed explicitly*/
-        watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
-        /* set packet id to command response packet */
+        // watchdogConfig(WATCHDOG_16MS); // keep watchdog happy
+      //read all data
+        for(int i=0;i<7;i++)
+        {
+             getch();
+        }
+       /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
         /* set packet length */
         xcpInfo.ctoLen = 1;
         break;
+      }
       case XCP_CMD_PROGRAM_RESET:
         /* set packet id to command response packet */
         xcpInfo.ctoData[0] = XCP_PID_RES;
         /* set packet length */
         xcpInfo.ctoLen = 1;
         break;
-      case XCP_CMD_PROGRAM_PREPARE:
-        // XcpCmdProgramPrepare(data);
-        break;
-      default:
-        // unknown cmd found
-        xcpInfo.ctoData[0] = XCP_PID_ERR;
-        xcpInfo.ctoData[1] = XCP_ERR_CMD_UNKNOWN;
-        xcpInfo.ctoLen = 2;
-        break;
       }
     }
-    /* make sure the previous command was completed */
-    if (xcpInfo.ctoPending == 1) {
-      /* command overrun occurred */
-      xcpInfo.ctoData[0] = XCP_PID_ERR;
-      xcpInfo.ctoData[1] = XCP_ERR_CMD_BUSY;
-      xcpInfo.ctoLen = 2;
-    }
-
     /* send the response if it contains something */
     if (xcpInfo.ctoLen > 0) {
-      //watchdogConfig(WATCHDOG_16MS); // shorten WD timeout
-      /* set cto packet transmission pending flag */
-      xcpInfo.ctoPending = 1;
-      /* transmit the cto response packet */
       // transmit len of data packet
       putch(xcpInfo.ctoLen);
       // transmitt data packets
       for (int i = 0; i < xcpInfo.ctoLen; i++) {
         putch(xcpInfo.ctoData[i]);
       }
-      //set len to zero
-      xcpInfo.ctoLen=0;
-      //remove pending status
-      xcpInfo.ctoPending = 0;
+      // set len to zero
+      xcpInfo.ctoLen = 0;
+      //reset recieve packet len
+      xcpInfo.rx_packet_len=0;
     }
 #else
     if (ch == STK_GET_PARAMETER) {
