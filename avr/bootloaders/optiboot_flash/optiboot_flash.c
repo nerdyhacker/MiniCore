@@ -667,8 +667,6 @@ register pagelen_t length;
   /* Turn on LED to indicate starting bootloader (less code!) */
   LED_PORT |= _BV(LED);
 #endif
-  // putch('x');
-  // watchdogConfig(WATCHDOG_OFF);
   /* Forever loop: exits by causing WDT reset */
   for (;;) {
 // openBLT support for optiboot
@@ -686,8 +684,6 @@ register pagelen_t length;
     }
     /* was this a connect command? */
     if (ch == XCP_CMD_CONNECT) {
-      // watchdogConfig(WATCHDOG_OFF);
-      // watchdogConfig(WATCHDOG_250MS);
       /* indicate that the connection is established */
       xcpInfo.connected = 1;
 
