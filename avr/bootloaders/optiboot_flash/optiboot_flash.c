@@ -732,6 +732,8 @@ register pagelen_t length;
         putch(XCP_PID_RES);
         // read mem
         read_mem('F', address, len);
+        //auto increment address
+         address.word+=128;
         break;
       }
       case XCP_CMD_SHORT_UPLOAD:
@@ -797,6 +799,8 @@ register pagelen_t length;
         xcpInfo.ctoLen = 1;
         // write
         writebuffer('F', buff, address, savelength);
+        //auto increment address
+        address.word+=128;
         break;
       }
       case XCP_CMD_PROGRAM: {
@@ -818,6 +822,8 @@ register pagelen_t length;
           while (--len);
           // write
           writebuffer('F', buff, address, savelength);
+          //auto increment adress
+          address.word+=128;
         }
         break;
       }
